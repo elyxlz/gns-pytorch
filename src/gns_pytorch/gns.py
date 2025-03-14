@@ -56,7 +56,7 @@ def compute_gns(
         val = 0.0
     val = max(val, 0.0)
     if torch.distributed.is_initialized():
-        torch.distributed.all_reduce(
-            torch.tensor(val, device=dev), op=torch.distributed.ReduceOp.AVG
-        )
+        t_val = torch.tensor(val, device=dev)
+        torch.distributed.all_reduce(t_val, op=torch.distributed.ReduceOp.AVG)
+        val = t_val.item()
     return val
