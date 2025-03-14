@@ -1,4 +1,4 @@
-# GNS-PyTorch - Gradient Noise Scale
+# GNS PyTorch
 
 This is the easiest way to calculate GNS (Gradient Noise Scale) for your PyTorch models. No hooks, gradient accumulation, or multi-GPU setup needed. Just pass in your per-example losses and model.
 
