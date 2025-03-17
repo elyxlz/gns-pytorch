@@ -49,3 +49,4 @@ With accurate GNS you can schedule your batch size (using gradient accumulation)
 - Use an EMA on the GNS values since they are very noisy
 - The `param_percentage` param lets you sample a subset of model parameters for faster computation
 - Enable vmap with `use_vmap=True` to speed up computation by parallelizing per-example gradients (unfortunately, PyTorch's vmap isn't composable with flex attention and torch.compile yet)
+- GNS directly approximates critical batch size. For example, if GNS logger shows 64 and your global batch size is 32, you should double your gradient accumulation steps
