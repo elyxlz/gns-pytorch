@@ -14,15 +14,16 @@ def compute_gns(
 ) -> float:
     assert loss_per_example.ndim == 1
     assert loss_per_example.size(0) > 1
+
     all_params = list(model.parameters())
     k = max(min(len(all_params), 10), int(len(all_params) * param_percentage))
     all_params = random.sample(all_params, k)
+
     new_batch_size = max(2, int(loss_per_example.size(0) * batch_percentage))
     loss_per_example = loss_per_example[:new_batch_size]
     bsz = loss_per_example.size(0)
     dev = loss_per_example.device
 
-    g = None
     if use_vmap:
         eye = torch.eye(bsz, device=dev)
 
@@ -30,26 +31,17 @@ def compute_gns(
             g = torch.autograd.grad(
                 loss_per_example, all_params, v, retain_graph=True, allow_unused=True
             )
-            return [
-                x if x is not None else torch.zeros_like(p)
-                for x, p in zip(g, all_params)
-            ]
+            return [x.detach() for x in g if x is not None]
 
         batched_grads = torch.vmap(grads_for_vec)(eye)
     else:
-        batched_grads = []
+        all_grads = []
         for i in range(bsz):
             g = torch.autograd.grad(
                 loss_per_example[i], all_params, retain_graph=True, allow_unused=True
             )
-            batched_grads.append(
-                [
-                    x if x is not None else torch.zeros_like(p)
-                    for x, p in zip(g, all_params)
-                ]
-            )
-
-        per_param = list(zip(*batched_grads))
+            all_grads.append([x.detach() for x in g if x is not None])
+        per_param = list(zip(*all_grads))
         batched_grads = [
             torch.stack(grads_for_param, dim=0) for grads_for_param in per_param
         ]
@@ -71,13 +63,13 @@ def compute_gns(
         if math.isnan(val) or val < 0.0:
             val = 0.0
 
-    del batched_grads, sqnorm_per_ex, g, sq_large, sq_small
+        if torch.distributed.is_initialized():
+            t_val = torch.tensor(val, device=dev)
+            torch.distributed.all_reduce(t_val, op=torch.distributed.ReduceOp.AVG)
+            val = t_val.item()
+
+    del batched_grads, sqnorm_per_ex, sq_large, sq_small
     gc.collect()
     torch.cuda.empty_cache()
-
-    if torch.distributed.is_initialized():
-        t_val = torch.tensor(val, device=dev)
-        torch.distributed.all_reduce(t_val, op=torch.distributed.ReduceOp.AVG)
-        val = t_val.item()
 
     return val
