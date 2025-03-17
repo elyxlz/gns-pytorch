@@ -9,11 +9,16 @@ def compute_gns(
     loss_per_example: torch.Tensor,
     model: torch.nn.Module,
     param_percentage: float = 0.01,
+    batch_percentage: float = 0.25,
     use_vmap: bool = False,
 ) -> float:
+    assert loss_per_example.ndim == 1
+    assert loss_per_example.size(0) > 1
     all_params = list(model.parameters())
     k = max(min(len(all_params), 10), int(len(all_params) * param_percentage))
     all_params = random.sample(all_params, k)
+    new_batch_size = max(2, int(loss_per_example.size(0) * batch_percentage))
+    loss_per_example = loss_per_example[:new_batch_size]
     bsz = loss_per_example.size(0)
     dev = loss_per_example.device
 
